@@ -79,8 +79,8 @@ void setup() {
   pinMode(pingPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
-  digitalWrite(tankPump, LOW);
-  digitalWrite(irrPump, LOW);
+  digitalWrite(tankPump, HIGH);
+  digitalWrite(irrPump, HIGH);
 
   tft.begin();
   tft.setRotation(3);
@@ -97,19 +97,30 @@ void setup() {
   tft.fillScreen(ILI9341_BLACK);
 }
 void loop() {
-  if (millis() - lastRefresh > 500) {
+  int board1X = boardsStruct[0].x;
+  int board1Y = boardsStruct[0].y;
+  int board2X = boardsStruct[1].x;
+  int board2Y = boardsStruct[1].y;
+
+  if (millis() - lastRefresh > 1000) {
+    Serial.print("Sensor 1: ");
+    Serial.println(board1X);
+    Serial.print("Valve 1: ");
+    Serial.println(board1Y);
+    Serial.print("Sensor 2: ");
+    Serial.println(board2X);
+    Serial.print("Valve 2: ");
+    Serial.println(board2Y);
     getWaterLevel();
     controlTankPump();
-    controlIrrPump();
-    if (millis() - lastClearScreen > 1000) {
-      updateSensors(0, 120);
-      lastClearScreen = millis();
-    }
-    updateValves(0, 160);
+    controlIrrPump(board1Y, board2Y);
+    updateSensors(0, 120, board1X, board2X);
+    updateValves(0, 160, board1Y, board2Y);
 
     lastRefresh = millis();
   }
 }
+
 
 void getWaterLevel () {
   long duration, cm, cms;
@@ -121,24 +132,20 @@ void getWaterLevel () {
   duration = pulseIn(echoPin, HIGH);
   cm = microsecondsToCentimeters(duration);
 
-  //Serial.print(cm);
-  //Serial.print("cm: Distance to water Level");
-  //Serial.println();
-
   waterLevel = tankHeight - cm;
-  if (millis() - lastClearScreen > 1000) {
+  if (millis() - lastClearScreen > 2000) {
     updateWL(0, 10);
     lastClearScreen = millis();
   }
   Serial.print(waterLevel);
   Serial.print("cm: water Level");
   Serial.println();
-
 }
+
 
 void controlTankPump() {
   if (waterLevel < 50 ) {
-    digitalWrite(tankPump, HIGH);
+    digitalWrite(tankPump, LOW);
     Serial.println("Tank Pump ON");
     if (tankPumpState == 0) {
       updatePump(0, 40, tankPumpState, "Tank ");
@@ -146,7 +153,7 @@ void controlTankPump() {
     tankPumpState = 1;
   }
   else if (waterLevel > 104) {
-    digitalWrite(tankPump, LOW);
+    digitalWrite(tankPump, HIGH);
     Serial.println("Tank Pump OFF");
     if (tankPumpState == 1) {
       updatePump(0, 40, tankPumpState, "Tank ");
@@ -155,9 +162,10 @@ void controlTankPump() {
   }
 }
 
-void controlIrrPump() {
+
+void controlIrrPump(int valve1, int valve2) {
   if (waterLevel < 20) {
-    digitalWrite(irrPump, LOW);
+    digitalWrite(irrPump, HIGH);
     Serial.println("Irrigation Pump OFF");
     if (irrPumpState == 1) {
       updatePump(0, 80, irrPumpState, "Irrigation ");
@@ -166,15 +174,15 @@ void controlIrrPump() {
     return;
   }
 
-  if (boardsStruct[0].y || boardsStruct[1].y) {
-    digitalWrite(irrPump, HIGH);
+  if (!valve1 || !valve2) {
+    digitalWrite(irrPump, LOW);
     Serial.println("Irrigation Pump ON");
     if (irrPumpState == 0) {
       updatePump(0, 80, irrPumpState, "Irrigation ");
     }
     irrPumpState = 1;
   } else {
-    digitalWrite(irrPump, LOW);
+    digitalWrite(irrPump, HIGH);
     Serial.println("Irrigation Pump OFF");
     if (irrPumpState == 1) {
       updatePump(0, 80, irrPumpState, "Irrigation ");
@@ -182,9 +190,12 @@ void controlIrrPump() {
     irrPumpState = 0;
   }
 }
+
+
 long microsecondsToCentimeters(long microseconds) {
   return microseconds / 29 / 2;
 }
+
 
 void updatePump(int x, int y, int pumpState, String pump) {
   tft.fillRect (x, y, 280, 50, ILI9341_YELLOW);
@@ -208,39 +219,41 @@ void updateWL(int x, int y) {
   tft.println(waterLevel);
 }
 
-void updateValves(int x, int y) {
+
+void updateValves(int x, int y, int valve1, int valve2) {
   tft.fillRect (x, y, 300, 30, ILI9341_YELLOW);
   tft.setCursor(x, y + 20);
   tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
   //valve 1
-  tft.print("Valve 1: ");
-  if (boardsStruct[0].y) {
+  tft.print("V 1: ");
+  if (!valve1) {
     tft.print("ON ");
     Serial.println("Valve 1 ON");
   }
   else {
-    tft.print("OFF ");    
+    tft.print("OFF ");
     Serial.println("Valve 1 OFF");
   }
   //valve 2
-  tft.print("Valve 2: ");
-  if (boardsStruct[1].y) {
+  tft.print("V 2: ");
+  if (!valve2) {
     tft.println("ON");
     Serial.println("Valve 2 ON");
   }
   else {
     tft.print("OFF");
-    Serial.println("Valve 2 ON");
+    Serial.println("Valve 2 OFF");
   }
 }
 
-void updateSensors(int x, int y) {
-  tft.fillRect (x, y, 240, 30, ILI9341_YELLOW);
+
+void updateSensors(int x, int y, int sensor1, int sensor2) {
+  tft.fillRect (x, y, 260, 30, ILI9341_YELLOW);
   tft.setCursor(x, y + 20);
   tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
-  tft.print("Sensor 1: ");
-  tft.print(boardsStruct[0].x);
+  tft.print("S1: ");
+  tft.print(sensor1);
 
-  tft.print(" Sensor2: ");
-  tft.println(boardsStruct[1].x);
+  tft.print(" S2: ");
+  tft.println(sensor2);
 }
