@@ -13,13 +13,39 @@
 // MOSI(DIN) ---> NodeMCU pin D7 (GPIO13)
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
+// some principal color definitions
+// RGB 565 color picker at https://ee-programming-notepad.blogspot.com/2016/10/16-bit-color-generator-picker.html
+#define WHITE       0xFFFF
+#define BLACK       0x0000
+#define BLUE        0x001F
+#define RED         0xF800
+#define GREEN       0x07E0
+#define CYAN        0x07FF
+#define MAGENTA     0xF81F
+#define YELLOW      0xFFE0
+#define GREY        0x2108
+#define SCALE0      0xC655                                                  // accent color for unused scale segments                                   
+#define SCALE1      0x5DEE                                                  // accent color for unused scale segments
+#define TEXT_COLOR  0xFFFF                                                  // is currently white 
+
+// circular scale color scheme
+#define RED2RED 0
+#define GREEN2GREEN 1
+#define BLUE2BLUE 2
+#define BLUE2RED 3
+#define GREEN2RED 4
+#define RED2GREEN 5
+#define RED2BLUE 6
+
 #define tankPump 22
 #define irrPump 17
 #define pingPin 14 // Trigger Pin of Ultrasonic Sensor
 #define echoPin 13 // Echo Pin of Ultrasonic Sensor
 
-const int16_t tankHeight = 108;
+const int16_t tankHeight = 60;
 int waterLevel;
+const int waterFilled = 55;
+const int waterLow = 20;
 
 int lastClearScreen = 0;
 int lastRefresh = 0;
@@ -27,6 +53,11 @@ int lastRefresh = 0;
 int tankPumpState = 0;
 int irrPumpState = 0;
 
+// display positions
+int gaugeposition_x = 0;                                                 // these two variables govern the position
+int gaugeposition_y = 0;
+
+//
 //Data struct to be received
 typedef struct struct_message {
   int id;
@@ -70,8 +101,6 @@ void setup() {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-
-
   esp_now_register_recv_cb(OnDataRecv);
 
   pinMode(tankPump, OUTPUT);
@@ -84,38 +113,41 @@ void setup() {
 
   tft.begin();
   tft.setRotation(3);
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setCursor(50, 30); // ROW, collumn
-  tft.setTextColor(ILI9341_WHITE);  tft.setTextSize(1);
+  tft.fillScreen(ILI9341_WHITE);
+  tft.setCursor(120, 60);
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(2);
   tft.setFont(&FreeMonoBoldOblique12pt7b);
   tft.println("IRRIGAR");
-  tft.setCursor(0, 70);
   tft.setFont(&FreeMonoBoldOblique12pt7b);
-  tft.setTextColor(ILI9341_YELLOW);  tft.setTextSize(1);
+  tft.setCursor(0, 90);
+  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
   tft.println("Your solution to irrigation");
-  delay(1000);
+  delay(2000);
   tft.fillScreen(ILI9341_BLACK);
 }
 void loop() {
-  int board1X = boardsStruct[0].x;
-  int board1Y = boardsStruct[0].y;
-  int board2X = boardsStruct[1].x;
-  int board2Y = boardsStruct[1].y;
+  //  int board1X = boardsStruct[0].x;
+  //  int board1Y = boardsStruct[0].y;
+  //  int board2X = boardsStruct[1].x;
+  //  int board2Y = boardsStruct[1].y;
+  int nodeData[] = [boardsStruct[0].x, boardsStruct[0].y, boardsStruct[1].x, boardsStruct[1].y]
+                   //  getNodeData();
 
   if (millis() - lastRefresh > 1000) {
     Serial.print("Sensor 1: ");
-    Serial.println(board1X);
+    Serial.println(nodeData[0]);
     Serial.print("Valve 1: ");
-    Serial.println(board1Y);
+    Serial.println(nodeData[1]);
     Serial.print("Sensor 2: ");
-    Serial.println(board2X);
+    Serial.println(nodeData[2]);
     Serial.print("Valve 2: ");
-    Serial.println(board2Y);
+    Serial.println(nodeData[3]);
+
     getWaterLevel();
     controlTankPump();
     controlIrrPump(board1Y, board2Y);
-    updateSensors(0, 120, board1X, board2X);
-    updateValves(0, 160, board1Y, board2Y);
+    updateSensors(0, 120, nodeData[0], nodeData[1]);
+    updateValves(0, 160, nodeData[2], nodeData[3]);
 
     lastRefresh = millis();
   }
@@ -123,7 +155,7 @@ void loop() {
 
 
 void getWaterLevel () {
-  long duration, cm, cms;
+  long duration, cm;
   digitalWrite(pingPin, LOW);
   delayMicroseconds(2);
   digitalWrite(pingPin, HIGH);
@@ -144,7 +176,7 @@ void getWaterLevel () {
 
 
 void controlTankPump() {
-  if (waterLevel < 50 ) {
+  if (waterLevel < 30 ) {
     digitalWrite(tankPump, LOW);
     Serial.println("Tank Pump ON");
     if (tankPumpState == 0) {
@@ -152,7 +184,7 @@ void controlTankPump() {
     }
     tankPumpState = 1;
   }
-  else if (waterLevel > 104) {
+  else if (waterLevel > waterFilled) {
     digitalWrite(tankPump, HIGH);
     Serial.println("Tank Pump OFF");
     if (tankPumpState == 1) {
@@ -164,7 +196,7 @@ void controlTankPump() {
 
 
 void controlIrrPump(int valve1, int valve2) {
-  if (waterLevel < 20) {
+  if (waterLevel < waterLow) {
     digitalWrite(irrPump, HIGH);
     Serial.println("Irrigation Pump OFF");
     if (irrPumpState == 1) {
