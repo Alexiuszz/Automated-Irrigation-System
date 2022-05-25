@@ -54,9 +54,12 @@ int tankPumpState = 0;
 int irrPumpState = 0;
 
 // display positions
-int gaugeposition_x = 0;                                                 // these two variables govern the position
+int gaugeposition_x = 20;                                                 // these two variables govern the position
 int gaugeposition_y = 0;
 
+int radius = 40;
+
+int circleRadius = 25;
 //
 //Data struct to be received
 typedef struct struct_message {
@@ -115,23 +118,23 @@ void setup() {
   tft.setRotation(3);
   tft.fillScreen(ILI9341_WHITE);
   tft.setCursor(120, 60);
-  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(2);
-  tft.setFont(&FreeMonoBoldOblique12pt7b);
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(3);
+  //  tft.setFont(&FreeMonoBoldOblique12pt7b);
   tft.println("IRRIGAR");
-  tft.setFont(&FreeMonoBoldOblique12pt7b);
-  tft.setCursor(0, 90);
-  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
+  //  tft.setFont(&FreeMonoBoldOblique12pt7b);
+  tft.setCursor(20, 90);
+  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(2);
   tft.println("Your solution to irrigation");
   delay(2000);
-  tft.fillScreen(ILI9341_BLACK);
+  setRingMeter();
 }
 void loop() {
-  //  int board1X = boardsStruct[0].x;
-  //  int board1Y = boardsStruct[0].y;
-  //  int board2X = boardsStruct[1].x;
-  //  int board2Y = boardsStruct[1].y;
-  int nodeData[] = [boardsStruct[0].x, boardsStruct[0].y, boardsStruct[1].x, boardsStruct[1].y]
-                   //  getNodeData();
+  int board1X = boardsStruct[0].x;
+  int board1Y = boardsStruct[0].y;
+  int board2X = boardsStruct[1].x;
+  int board2Y = boardsStruct[1].y;
+  int nodeData[4] = {board1X, board1Y, board2X, board2Y};
+
 
   if (millis() - lastRefresh > 1000) {
     Serial.print("Sensor 1: ");
@@ -145,9 +148,9 @@ void loop() {
 
     getWaterLevel();
     controlTankPump();
-    controlIrrPump(board1Y, board2Y);
-    updateSensors(0, 120, nodeData[0], nodeData[1]);
-    updateValves(0, 160, nodeData[2], nodeData[3]);
+    controlIrrPump(nodeData[1], nodeData[3]);
+    updateSensors((gaugeposition_x + 100), (gaugeposition_y + 25), (gaugeposition_x + 200), (gaugeposition_y + 25), nodeData[0], nodeData[2]);
+    updateValves(5, 150, 180, nodeData[1], nodeData[3]);
 
     lastRefresh = millis();
   }
@@ -166,7 +169,7 @@ void getWaterLevel () {
 
   waterLevel = tankHeight - cm;
   if (millis() - lastClearScreen > 2000) {
-    updateWL(0, 10);
+    updateWL(gaugeposition_x + 3, gaugeposition_y + 25);
     lastClearScreen = millis();
   }
   Serial.print(waterLevel);
@@ -180,7 +183,7 @@ void controlTankPump() {
     digitalWrite(tankPump, LOW);
     Serial.println("Tank Pump ON");
     if (tankPumpState == 0) {
-      updatePump(0, 40, tankPumpState, "Tank ");
+      updatePump(5, 80, tankPumpState);
     }
     tankPumpState = 1;
   }
@@ -188,7 +191,7 @@ void controlTankPump() {
     digitalWrite(tankPump, HIGH);
     Serial.println("Tank Pump OFF");
     if (tankPumpState == 1) {
-      updatePump(0, 40, tankPumpState, "Tank ");
+      updatePump(5, 80, tankPumpState);
     }
     tankPumpState = 0;
   }
@@ -200,7 +203,7 @@ void controlIrrPump(int valve1, int valve2) {
     digitalWrite(irrPump, HIGH);
     Serial.println("Irrigation Pump OFF");
     if (irrPumpState == 1) {
-      updatePump(0, 80, irrPumpState, "Irrigation ");
+      updatePump(140, 145, irrPumpState);
     }
     irrPumpState = 0;
     return;
@@ -210,14 +213,14 @@ void controlIrrPump(int valve1, int valve2) {
     digitalWrite(irrPump, LOW);
     Serial.println("Irrigation Pump ON");
     if (irrPumpState == 0) {
-      updatePump(0, 80, irrPumpState, "Irrigation ");
+      updatePump(140, 145, irrPumpState);
     }
     irrPumpState = 1;
   } else {
     digitalWrite(irrPump, HIGH);
     Serial.println("Irrigation Pump OFF");
     if (irrPumpState == 1) {
-      updatePump(0, 80, irrPumpState, "Irrigation ");
+      updatePump(140, 145, irrPumpState);
     }
     irrPumpState = 0;
   }
@@ -228,64 +231,197 @@ long microsecondsToCentimeters(long microseconds) {
   return microseconds / 29 / 2;
 }
 
+void setRingMeter() {
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextColor (YELLOW, BLACK);
+  tft.setCursor (20, 0); tft.setTextSize (2); tft.print("Water");
+  tft.setCursor (110, 0); tft.setTextSize (2); tft.print("SoilM1");
+  tft.setCursor (210, 0); tft.setTextSize (2); tft.print("SoilM2");
 
-void updatePump(int x, int y, int pumpState, String pump) {
-  tft.fillRect (x, y, 280, 50, ILI9341_YELLOW);
-  tft.setCursor(x, y + 20);
-  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
+  tft.setCursor (5, 180); tft.setTextSize (2); tft.print("VALVE1: ");
+  tft.setCursor (150, 180); tft.setTextSize (2); tft.print("VALVE2: ");
+
+
+  tft.setCursor (5, 130); tft.setTextSize (2); tft.print("Tank: ");
+  tft.setCursor (125, 130); tft.setTextSize (2); tft.print("Irrigation: ");
+}
+
+void updatePump(int x, int circle, int pumpState) {
   if (pumpState == 1) {
-    tft.print(pump);
-    tft.println("Pump OFF");
+    tft.setTextColor (WHITE, RED);
+    tft.fillCircle(x + circle, 135, 22, ILI9341_RED);
+    tft.setCursor (x + circle - 15 , 130); tft.setTextSize (2); tft.print("OFF");
   } else {
-    tft.print(pump);
-    tft.println("Pump ON");
+    tft.setTextColor (WHITE, GREEN);
+    tft.fillCircle(x + circle, 135, 22, ILI9341_GREEN);
+    tft.setCursor (x + circle - 10, 130); tft.setTextSize (2); tft.print("ON");
   }
 }
 
 
 void updateWL(int x, int y) {
-  tft.fillRect (x, y, 240, 30, ILI9341_YELLOW);
-  tft.setCursor(x, y + 20);
-  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
-  tft.print("Water Level: ");
-  tft.println(waterLevel);
+  ringMeter (waterLevel, 0, 60, x, y, radius, "cm", RED2BLUE);
 }
 
 
-void updateValves(int x, int y, int valve1, int valve2) {
-  tft.fillRect (x, y, 300, 30, ILI9341_YELLOW);
-  tft.setCursor(x, y + 20);
-  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
+void updateValves(int x, int x1, int y, int valve1, int valve2) {
   //valve 1
-  tft.print("V 1: ");
   if (!valve1) {
-    tft.print("ON ");
+    tft.setTextColor (WHITE, GREEN);
+    tft.fillCircle(x + 105, y + 5, 22, ILI9341_GREEN);
+    tft.setCursor (x + 95, y); tft.setTextSize (2); tft.print("ON");
     Serial.println("Valve 1 ON");
   }
   else {
-    tft.print("OFF ");
+    tft.setTextColor (WHITE, RED);
+    tft.fillCircle(x + 105, y + 5, 22, ILI9341_RED);
+    tft.setCursor (x + 90, y); tft.setTextSize (2); tft.print("OFF");
     Serial.println("Valve 1 OFF");
   }
   //valve 2
-  tft.print("V 2: ");
   if (!valve2) {
-    tft.println("ON");
+    tft.setTextColor (WHITE, GREEN);
+    tft.fillCircle(x1 + 105, y + 5, 22, ILI9341_GREEN);
+    tft.setCursor (x1 + 95, y); tft.setTextSize (2); tft.print("ON");
     Serial.println("Valve 2 ON");
   }
   else {
-    tft.print("OFF");
+    tft.setTextColor (WHITE, RED);
+    tft.fillCircle(x1 + 105, y + 5, 22, ILI9341_RED);
+    tft.setCursor (x1 + 90, y); tft.setTextSize (2); tft.print("OFF");
     Serial.println("Valve 2 OFF");
   }
 }
 
 
-void updateSensors(int x, int y, int sensor1, int sensor2) {
-  tft.fillRect (x, y, 260, 30, ILI9341_YELLOW);
-  tft.setCursor(x, y + 20);
-  tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(1);
-  tft.print("S1: ");
-  tft.print(sensor1);
+void updateSensors(int x, int y, int x1, int y1, int sensor1, int sensor2) {
+  ringMeter (sensor1, 0, 100, (gaugeposition_x + 100), (gaugeposition_y + 25), radius, "%", RED2GREEN);
+  ringMeter (sensor2, 0, 100, (gaugeposition_x + 200), (gaugeposition_y + 25), radius, "%", RED2GREEN);
 
-  tft.print(" S2: ");
-  tft.println(sensor2);
+}
+
+
+int ringMeter(int value, int vmin, int vmax, int x, int y, int r, char *units, byte scheme) {
+  // Minimum value of r is about 52 before value text intrudes on ring
+  // drawing the text first is an option
+
+  x += r; y += r;                                                             // calculate coordinates of center of ring
+  int w = r / 3;                                                              // width of outer ring is 1/4 of radius
+  int angle = 150;                                                            // half the sweep angle of the meter (300 degrees)
+  int v = map(value, vmin, vmax, -angle, angle);                              // map the value to an angle v
+  byte seg = 3;                                                               // segments are 3 degrees wide = 100 segments for 300 degrees
+  byte inc = 6;                                                               // draw segments every 3 degrees, increase to 6 for segmented ring
+  int colour = BLUE;                                                          // variable to save "value" text color from scheme and set default
+
+
+  for (int i = -angle + inc / 2; i < angle - inc / 2; i += inc)               // draw color blocks every increment degrees
+  {
+    float sx = cos((i - 90) * 0.0174532925);                                 // calculate pair of coordinates for segment start
+    float sy = sin((i - 90) * 0.0174532925);
+    uint16_t x0 = sx * (r - w) + x;
+    uint16_t y0 = sy * (r - w) + y;
+    uint16_t x1 = sx * r + x;
+    uint16_t y1 = sy * r + y;
+
+    float sx2 = cos((i + seg - 90) * 0.0174532925);                          // salculate pair of coordinates for segment end
+    float sy2 = sin((i + seg - 90) * 0.0174532925);
+    int x2 = sx2 * (r - w) + x;
+    int y2 = sy2 * (r - w) + y;
+    int x3 = sx2 * r + x;
+    int y3 = sy2 * r + y;
+
+    if (i < v)
+    { // fill in coloured segments with 2 triangles
+      switch (scheme)
+      {
+        case 0: colour = RED; break;                                     // fixed color
+        case 1: colour = GREEN; break;                                   // fixed color
+        case 2: colour = BLUE; break;                                    // fixed colour
+        case 3: colour = rainbow(map(i, -angle, angle, 0, 127)); break;  // full spectrum blue to red
+        case 4: colour = rainbow(map(i, -angle, angle, 70, 127)); break; // green to red (high temperature etc)
+        case 5: colour = rainbow(map(i, -angle, angle, 127, 63)); break; // red to green (low battery etc)
+        case 6: colour = rainbow(map(i, -angle, angle, 127, 0)); break; // red to blue (low battery etc)
+        default: colour = BLUE; break;                                   // fixed color
+      }
+      tft.fillTriangle(x0, y0, x1, y1, x2, y2, colour);
+      tft.fillTriangle(x1, y1, x2, y2, x3, y3, colour);
+    }
+    else                                                                     // fill in blank segments
+    {
+      tft.fillTriangle(x0, y0, x1, y1, x2, y2, BLACK );    //SCALE1            // color of the unoccupied ring scale
+      tft.fillTriangle(x1, y1, x2, y2, x3, y3, BLACK );           //SCALE0     // color of the unoccupied ring scale
+    }
+  }
+
+  char buf [10];                                                              // convert value to a string
+  byte len = 2; if (value > 999) len = 4;
+  dtostrf (value, len, 0, buf);
+  buf[len] = ' '; buf[len] = 0;                                               // add blanking space and terminator, helps to centre text too!
+
+  tft.setTextSize (2);
+  if (value > 9)
+  {
+    tft.setTextColor (colour, BLACK);
+    tft.setCursor (x - 13, y - 10); tft.setTextSize (2);
+    tft.print (buf);
+  }
+
+  if (value < 10)
+  {
+    tft.setTextColor (colour, BLACK);
+    tft.setCursor (x - 13, y - 10); tft.setTextSize (2);
+    tft.print (buf);
+  }
+
+  tft.setTextColor (WHITE, BLACK);
+  tft.setCursor (x - 5, y + 10); tft.setTextSize (2);                        // units position relative to scale
+  tft.print (units);                                                          // units display = celsius
+  return x + r;                                                               // calculate and return right hand side x coordinate
+}
+
+// ################################################################################################################################
+// Return a 16 bit rainbow colour
+// ################################################################################################################################
+
+unsigned int rainbow(byte value) {                                             // value is expected to be in range 0-127
+  // value is converted to a spectrum color from 0 = blue through to 127 = red
+  byte red = 0;                                                             // red is the top 5 bits of a 16 bit colour value
+  byte green = 0;                                                          // green is the middle 6 bits
+  byte blue = 0;                                                          // blue is the bottom 5 bits
+  byte quadrant = value / 32;
+
+  if (quadrant == 0)
+  {
+    blue = 31;
+    green = 2 * (value % 32);
+    red = 0;
+  }
+  if (quadrant == 1)
+  {
+    blue = 31 - (value % 32);
+    green = 63;
+    red = 0;
+  }
+  if (quadrant == 2)
+  {
+    blue = 0;
+    green = 63;
+    red = value % 32;
+  }
+  if (quadrant == 3)
+  {
+    blue = 0;
+    green = 63 - 2 * (value % 32);
+    red = 31;
+  }
+  return (red << 11) + (green << 5) + blue;
+}
+
+// ################################################################################################################################
+// Return a value in range -1 to +1 for a given phase angle in degrees
+// ################################################################################################################################
+
+float sineWave(int phase) {
+
+  return sin(phase * 0.0174532925);
 }
