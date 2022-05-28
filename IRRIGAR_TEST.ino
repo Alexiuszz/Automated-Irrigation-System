@@ -1,9 +1,24 @@
+// Template ID, Device Name and Auth Token are provided by the Blynk.Cloud
+// See the Device Info tab, or Template settings
+#define BLYNK_TEMPLATE_ID           "TMPLaTi0R8Kg"
+#define BLYNK_DEVICE_NAME           "Quickstart Device"
+#define BLYNK_AUTH_TOKEN            "Bo_wLf2tTZCYZzxPrvrYDkEX0RBvakbJ"
+
+
+// Comment this out to disable prints and save space
+#define BLYNK_PRINT Serial
+
 #include <Adafruit_GFX.h>       // include Adafruit graphics library
 #include <Adafruit_ILI9341.h>   // include Adafruit ILI9341 TFT library
 #include <Fonts\FreeMonoBoldOblique12pt7b.h>
 #include <Fonts\FreeMono9pt7b.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
+#include <AsyncTimer.h>
+#include <BlynkSimpleEsp32.h>
+
 
 #define TFT_CS   15 //D2     // TFT CS  pin is connected to NodeMCU pin D2 but it is assigned as GPIO4 
 #define TFT_RST  4 //D3     // TFT RST pin is connected to NodeMCU pin D3 but it is assigned as GPIO0
@@ -42,6 +57,23 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 #define pingPin 14 // Trigger Pin of Ultrasonic Sensor
 #define echoPin 13 // Echo Pin of Ultrasonic Sensor
 
+//blynk pins
+#define tankValue V0
+#define irriValue V1
+#define valve1Pin V2
+#define valve2Pin V3
+#define sensor1Pin V4
+#define sensor2Pin V5
+#define waterValue V6
+
+
+char auth[] = BLYNK_AUTH_TOKEN;
+
+// Your WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "Electronics";
+char pass[] = "Electronics";
+
 const int16_t tankHeight = 60;
 int waterLevel;
 const int waterFilled = 55;
@@ -49,6 +81,7 @@ const int waterLow = 20;
 
 int lastClearScreen = 0;
 int lastRefresh = 0;
+
 
 int tankPumpState = 0;
 int irrPumpState = 0;
@@ -74,6 +107,13 @@ struct_message myData;
 struct_message board1;
 struct_message board2;
 
+AsyncTimer blynkTimer;
+
+void timerFnc()
+{
+  sendToBlynk();
+  initEspNow();
+}
 
 struct_message boardsStruct[2] = {board1, board2};
 
@@ -97,15 +137,6 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
 void setup() {
   Serial.begin(115200); // open serial port, set the baud rate to 9600 bps
 
-  WiFi.mode(WIFI_STA);
-
-
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-  esp_now_register_recv_cb(OnDataRecv);
-
   pinMode(tankPump, OUTPUT);
   pinMode(irrPump, OUTPUT);
   pinMode(pingPin, OUTPUT);
@@ -126,38 +157,82 @@ void setup() {
   tft.setTextColor(ILI9341_BLACK);  tft.setTextSize(2);
   tft.println("Your solution to irrigation");
   delay(2000);
+
+  initEspNow();
+  blynkTimer.setInterval(timerFnc, 20000);
+
   setRingMeter();
+
 }
+int board1X; int board1Y; int board2X; int board2Y;
 void loop() {
-  int board1X = boardsStruct[0].x;
-  int board1Y = boardsStruct[0].y;
-  int board2X = boardsStruct[1].x;
-  int board2Y = boardsStruct[1].y;
-  int nodeData[4] = {board1X, board1Y, board2X, board2Y};
+  board1X = boardsStruct[0].x;
+  board1Y = boardsStruct[0].y;
+  board2X = boardsStruct[1].x;
+  board2Y = boardsStruct[1].y;
 
-
+  //  Blynk.run();
   if (millis() - lastRefresh > 1000) {
     Serial.print("Sensor 1: ");
-    Serial.println(nodeData[0]);
+    Serial.println(board1X);
     Serial.print("Valve 1: ");
-    Serial.println(nodeData[1]);
+    Serial.println(board1Y);
     Serial.print("Sensor 2: ");
-    Serial.println(nodeData[2]);
+    Serial.println(board2X);
     Serial.print("Valve 2: ");
-    Serial.println(nodeData[3]);
+    Serial.println(board2Y);
 
     getWaterLevel();
     controlTankPump();
-    controlIrrPump(nodeData[1], nodeData[3]);
-    updateSensors((gaugeposition_x + 100), (gaugeposition_y + 25), (gaugeposition_x + 200), (gaugeposition_y + 25), nodeData[0], nodeData[2]);
-    updateValves(5, 150, 180, nodeData[1], nodeData[3]);
+    controlIrrPump(board1Y, board2Y);
+    updateSensors((gaugeposition_x + 100), (gaugeposition_y + 25), (gaugeposition_x + 200), (gaugeposition_y + 25), board1X, board2X);
+    updateValves(5, 150, 180, board1Y, board2Y);
 
     lastRefresh = millis();
   }
+
+  blynkTimer.handle();
+
 }
 
 
-void getWaterLevel () {
+void initBlynk() {
+  Blynk.begin(auth, ssid, pass);
+  Serial.print("Station IP Address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void initEspNow() {
+  WiFi.mode(WIFI_STA);
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    ESP.restart();
+  }
+  esp_now_register_recv_cb(OnDataRecv);
+}
+
+void sendToBlynk() {
+  initBlynk();
+  Blynk.virtualWrite(tankValue, tankPumpState);
+  Blynk.virtualWrite(irriValue, irrPumpState);
+
+  Blynk.virtualWrite(waterValue, waterLevel);
+  Blynk.virtualWrite(valve2Pin, board2Y);
+
+  Blynk.virtualWrite(valve1Pin, board1Y);
+
+  Blynk.virtualWrite(sensor1Pin, board1X);
+  Blynk.virtualWrite(sensor2Pin, board2X);
+
+  delay(1000);
+  //  Blynk.disconnect();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  esp_err_t results = esp_wifi_stop();
+  //  esp_err_t startResults = esp_wifi_start();
+}
+
+void getWaterLevel() {
   long duration, cm;
   digitalWrite(pingPin, LOW);
   delayMicroseconds(2);
@@ -271,6 +346,7 @@ void updateValves(int x, int x1, int y, int valve1, int valve2) {
     tft.fillCircle(x + 105, y + 5, 22, ILI9341_GREEN);
     tft.setCursor (x + 95, y); tft.setTextSize (2); tft.print("ON");
     Serial.println("Valve 1 ON");
+
   }
   else {
     tft.setTextColor (WHITE, RED);
@@ -297,7 +373,6 @@ void updateValves(int x, int x1, int y, int valve1, int valve2) {
 void updateSensors(int x, int y, int x1, int y1, int sensor1, int sensor2) {
   ringMeter (sensor1, 0, 100, (gaugeposition_x + 100), (gaugeposition_y + 25), radius, "%", RED2GREEN);
   ringMeter (sensor2, 0, 100, (gaugeposition_x + 200), (gaugeposition_y + 25), radius, "%", RED2GREEN);
-
 }
 
 
@@ -340,7 +415,7 @@ int ringMeter(int value, int vmin, int vmax, int x, int y, int r, char *units, b
         case 3: colour = rainbow(map(i, -angle, angle, 0, 127)); break;  // full spectrum blue to red
         case 4: colour = rainbow(map(i, -angle, angle, 70, 127)); break; // green to red (high temperature etc)
         case 5: colour = rainbow(map(i, -angle, angle, 127, 63)); break; // red to green (low battery etc)
-        case 6: colour = rainbow(map(i, -angle, angle, 127, 0)); break; // red to blue (low battery etc)
+        case 6: colour = rainbow(map(i, -angle, angle, 127, 0)); break; // red to green (low battery etc)
         default: colour = BLUE; break;                                   // fixed color
       }
       tft.fillTriangle(x0, y0, x1, y1, x2, y2, colour);
